@@ -220,14 +220,14 @@ class EarlyLanguageEnvBeg(gymnasium.Env):
             return phonemes[:4]  # Consider all four phonemes
 
         return phonemes
-
     
     def insert_target_randomly(self, sentence, target):
-        target_str = ''.join(target)
-        sentence_str = ''.join([''.join(pair) for pair in sentence])
-        insert_position = random.randint(0, len(sentence_str) - len(target_str))
-        new_sentence_str = sentence_str[:insert_position] + target_str + sentence_str[insert_position:]
-        new_sentence = [new_sentence_str[i:i+2] for i in range(0, len(new_sentence_str), 2)]
+        # Determine a random position in the sentence list to insert the target
+        insert_position = random.randint(0, len(sentence))
+
+        # Insert the target list at the random position in the sentence list
+        new_sentence = sentence[:insert_position] + target + sentence[insert_position:]
+
         return new_sentence
 
     def generate_sentence_based_on_year(self):

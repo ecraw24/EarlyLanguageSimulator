@@ -87,7 +87,6 @@ for e in range(total_episodes):
     for time in range(500):
         action = agent.act(state)
         next_observation, reward, done, _ , _= env.step(action)
-        reward = reward if not done else -10
         next_state = flatten_state(next_observation)
         next_state = np.reshape(next_state, [1, state_size])
         agent.remember(state, action, reward, next_state, done)
