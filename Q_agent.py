@@ -6,7 +6,6 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 
-
 # Create your environment
 env = EarlyLanguageEnvBeg()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,12 +16,7 @@ def display_progress_bar(percentage, bar_length=40):
     bar = '[' + '#' * num_chars + '-' * (bar_length - num_chars) + ']'
     return f'{bar} {percentage * 100:.2f}%'
 
-NO_ACTION_PROBABILITY = 0.1  # 10% chance to take no action
-
 def generate_valid_action_for_year(year_index, env):
-    # With some probability, choose to take no action
-    if np.random.rand() < NO_ACTION_PROBABILITY:
-        return [0, 0, 0, 0]  # Representing no action
 
     max_consonants = len(env.child_dictionary['year 3']['consonants'])
     max_vowels = len(env.child_dictionary['year 3']['vowels'])
