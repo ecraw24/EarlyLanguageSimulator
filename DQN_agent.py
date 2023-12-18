@@ -7,6 +7,7 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from EarlyLanguageEnv_beg import EarlyLanguageEnvBeg
 import logging
+import matplotlib.pyplot as plt
 
 class DQNAgent:
     def __init__(self, state_size, action_size):
@@ -49,33 +50,70 @@ class DQNAgent:
             self.model.fit(state, target_f, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+    
+def flatten_state(observation):
+    # Flatten the observation dictionary into a single array
+    return np.concatenate([
+        np.array(observation['hour_of_day']).reshape(-1),
+        np.array(observation['day_of_year']).reshape(-1),
+        np.array(observation['year_index']).reshape(-1),
+        np.array(observation['parent_response']).reshape(-1)
+    ])
 
 # Create your environment
 env = EarlyLanguageEnvBeg()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Assuming you have an environment 'env'
-state_size = env.observation_space.shape[0]
+example_observation, _ = env.reset()
+flattened_example_observation = flatten_state(example_observation)
+state_size = flattened_example_observation.shape[0]
+
+# Now use this state_size to initialize your DQNAgent
 action_size = env.action_space.n
 agent = DQNAgent(state_size, action_size)
-total_episodes = 10
 batch_size = 100
 
-# Iterate over episodes
+# Training loop with data collection for graphing
+total_episodes = 10
+scores = []  # To store total reward/score per episode
+epsilons = []  # To store epsilon values per episode
+
 for e in range(total_episodes):
-    # reset state at the start of each episode
-    state = env.reset()
+    observation, _ = env.reset()
+    state = flatten_state(observation)
     state = np.reshape(state, [1, state_size])
-    
-    for time in range(500):  # 500 is an arbitrary number of steps
+    score = 0  # Reset score for the episode
+
+    for time in range(500):
         action = agent.act(state)
-        next_state, reward, done, _ = env.step(action)
+        next_observation, reward, done, _ , _= env.step(action)
         reward = reward if not done else -10
+        next_state = flatten_state(next_observation)
         next_state = np.reshape(next_state, [1, state_size])
         agent.remember(state, action, reward, next_state, done)
         state = next_state
-        if done:
-            print(f"episode: {e}/{total_episodes}, score: {time}, e: {agent.epsilon:.2}")
-            break
+        score += reward
+
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
+
+        if done:
+            print(f"Episode: {e+1}/{total_episodes}, Score: {score}, Epsilon: {agent.epsilon:.2f}")
+            break
+
+    scores.append(score)
+    epsilons.append(agent.epsilon)
+
+# Plotting the results
+plt.figure(figsize=(12, 5))
+
+# Plotting scores
+plt.subplot(1, 2, 1)
+plt.plot(scores)
+plt.title('Scores per Episode')
+plt.xlabel('Episode')
+plt.ylabel('Score')
+
+# Plotting epsilons
+plt.subplot(1, 2, 2)
+plt

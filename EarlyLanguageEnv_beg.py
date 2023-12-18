@@ -126,7 +126,14 @@ class EarlyLanguageEnvBeg(gymnasium.Env):
                 'year_index': self.year_index, 
                 'parent_response' : []
             }
-            return observation, self.total_reward, self.done, self.done, {"Total allowed steps completed. Simulation complete."}
+            return observation, self.total_reward, self.done, self.done, {'Total Calculated Reward': self.total_reward,
+                                                        'Cookie Count': self.cookie_count,
+                                                        'Parent Responses': self.parent_response,
+                                                        'Parent Sentence': '',
+                                                        'Child Sentence': '', 
+                                                        'No Action Steps': self.no_action,
+                                                        'Wrong Guesses': self.wrong_guess, 
+                                                        'Year': self.current_year}
         
         self.current_year = self.years[self.year_index]
         self.update_valid_actions()
@@ -181,8 +188,10 @@ class EarlyLanguageEnvBeg(gymnasium.Env):
                                                         'Cookie Count': self.cookie_count,
                                                         'Parent Responses': self.parent_response,
                                                         'Parent Sentence': sentence,
+                                                        'Child Sentence' : phonemes, 
                                                         'No Action Steps': self.no_action,
-                                                        'Wrong Guesses': self.wrong_guess}
+                                                        'Wrong Guesses': self.wrong_guess, 
+                                                        'Year': self.current_year}
 
     def interpret_phonemes(self, action):
         # Initialize an empty list for phonemes

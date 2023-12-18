@@ -3,6 +3,9 @@ import gymnasium
 import random
 from EarlyLanguageEnv_beg import EarlyLanguageEnvBeg
 import logging
+import matplotlib.pyplot as plt
+import pandas as pd
+
 
 # Create your environment
 env = EarlyLanguageEnvBeg()
@@ -49,15 +52,20 @@ action_size = np.prod(env.action_space.nvec)  # Product of dimensions of the act
 q_table = np.zeros((state_size, action_size))
 
 # Hyperparameters
-learning_rate = 0.5
-discount_rate = 0.75
+learning_rate = 0.50
+discount_rate = 0.25 # how much a child cares about LT reward
 epsilon = 1.0
 max_epsilon = 1.0
 min_epsilon = 0.01
-decay_rate = 0.001
+decay_rate = 0.1
 
 # Total number of hours in the simulation
 total_hours = 24 * 365 * 3 + 1
+
+# Initialize lists for data collection
+episode_rewards = []
+epsilons = []
+episode_data = []
 
 # Training loop
 num_episodes = 25
@@ -65,6 +73,7 @@ for episode in range(num_episodes):
     observation, _ = env.reset()
     done = False
     total_rewards = 0
+    year_data = {'year 1': [], 'year 2': [], 'year 3': []}
 
     while not done:
         # Calculate the state index
@@ -89,6 +98,16 @@ for episode in range(num_episodes):
         total_rewards += reward
         observation = new_observation
 
+        episode_rewards.append(total_rewards)
+        epsilons.append(epsilon)
+        if episode == 0 or episode == num_episodes - 1:
+            year_data[info['Year']].append(info)
+            episode_data.append({
+                'Episode': episode,
+                'Total Reward': total_rewards,
+                'Year Data': year_data
+            })
+
         # Calculate and display the progress bar
         current_hour = observation['hour_of_day'] + (observation['day_of_year'] - 1) * 24 + observation['year_index'] * 24 * 365
         progress_percentage = current_hour / total_hours
@@ -100,3 +119,49 @@ for episode in range(num_episodes):
     print(f"\nEpisode: {episode}, Total Reward: {total_rewards}, Epsilon: {epsilon}")
 
 env.close()
+
+# Plotting the results
+plt.figure(figsize=(12, 5))
+
+# Plotting episode rewards
+plt.subplot(1, 2, 1)
+plt.plot(episode_rewards)
+plt.title('Rewards per Episode')
+plt.xlabel('Episode')
+plt.ylabel('Total Reward')
+
+# Plotting epsilon values
+plt.subplot(1, 2, 2)
+plt.plot(epsilons)
+plt.title('Epsilon Values Over Episodes')
+plt.xlabel('Episode')
+plt.ylabel('Epsilon')
+
+plt.tight_layout()
+plt.show()
+
+flattened_data = []
+
+# Loop through each episode's data to flatten it
+for episode_info in episode_data:
+    episode_number = episode_info['Episode']
+    total_reward = episode_info['Total Reward']
+    for year, data_list in episode_info['Year Data'].items():
+        for data in data_list:
+            flattened_data.append({
+                'Episode #': episode_number,
+                'Year': year,
+                'Reward': total_reward,
+                'Parent Sentence': data.get('Parent Sentence', ''),
+                'Child Sentence': data.get('Child Sentence', ''),
+                'Cookie Count': data.get('Cookie Count', 0),
+                'Parent Response': data.get('Parent Responses', 0),
+                'No Action': data.get('No Action Steps', 0),
+                'Wrong Guess': data.get('Wrong Guesses', 0)
+            })
+
+# Create DataFrame from the flattened data
+df = pd.DataFrame(flattened_data)
+
+# Export to CSV
+df.to_csv('episode_data.csv', index=False)
