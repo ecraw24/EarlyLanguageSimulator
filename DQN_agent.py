@@ -9,6 +9,7 @@ from keras.regularizers import l2
 from EarlyLanguageEnv_beg import EarlyLanguageEnvBeg
 import logging
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 class DQNAgent:
     def __init__(self, state_size, action_size, action_space):
@@ -59,7 +60,7 @@ class DQNAgent:
 
         index = 0
         multiplier = 1
-        for action_part, space_size in zip(reversed(action), reversed(self.env.action_space.nvec)):
+        for action_part, space_size in zip(reversed(action), reversed(self.action_space.nvec)):
             index += action_part * multiplier
             multiplier *= space_size
 
@@ -80,12 +81,23 @@ class DQNAgent:
             action_index = self.action_to_index(action)  # Convert the action tuple to an index
             target_f[0, action_index] = target
 
-            self.model.fit(state, target_f, epochs=1, verbose=0)
-
+            self.model.fit(state, target_f, epochs=1, verbose=1)
+        
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+def encode_parent_response(parent_response, phoneme_to_index, max_length):
+    # Flatten the list of lists into a single list of phonemes
+    flat_response = [phoneme for sublist in parent_response for phoneme in sublist]
+
+    encoded_response = np.zeros(max_length, dtype=int)
+    for i, phoneme in enumerate(flat_response):
+        if i >= max_length:
+            break
+        encoded_response[i] = phoneme_to_index.get(phoneme, 0)  # Default to 0 for unknown phonemes
+    return encoded_response
     
-def flatten_state(observation, max_response_length=50):
+def flatten_state(observation, phoneme_to_index, max_response_length=50):
     # Flatten hour_of_day, day_of_year, and year_index
     hour_of_day = np.array(observation['hour_of_day']).reshape(-1)
     day_of_year = np.array(observation['day_of_year']).reshape(-1)
@@ -93,16 +105,10 @@ def flatten_state(observation, max_response_length=50):
 
     # Handle variable-length parent_response
     parent_response = np.array(observation['parent_response'], dtype=object)
-    if len(parent_response) < max_response_length:
-        # Pad shorter responses
-        padding = np.zeros(max_response_length - len(parent_response), dtype=int)
-        parent_response = np.concatenate([parent_response, padding])
-    else:
-        # Truncate longer responses
-        parent_response = parent_response[:max_response_length]
+    encoded_response = encode_parent_response(observation['parent_response'], phoneme_to_index, max_response_length)
 
     # Concatenate all flattened parts
-    flattened_state = np.concatenate([hour_of_day, day_of_year, year_index, parent_response])
+    flattened_state = np.concatenate([hour_of_day, day_of_year, year_index, encoded_response])
 
     return flattened_state
 
@@ -113,14 +119,15 @@ def standardize_parent_response(parent_response, max_length):
     standardized_response[:response_length] = parent_response[:response_length]
     return standardized_response
 
-def print_progress(episode, total_episodes):
-    bar_length = 30
-    progress = episode / total_episodes
-    block = int(round(bar_length * progress))
-    text = "\rProgress: [{0}] {1:.2f}% Episode: {2}/{3}".format(
-        "#" * block + "-" * (bar_length - block), progress * 100, episode, total_episodes
-    )
-    print(text, end="")
+def print_progress(episode, total_episodes, update_frequency=10):
+    if episode % update_frequency == 0 or episode == total_episodes - 1:
+        bar_length = 30
+        progress = episode / total_episodes
+        block = int(round(bar_length * progress))
+        text = "\rProgress: [{0}] {1:.2f}% Episode: {2}/{3}".format(
+            "#" * block + "-" * (bar_length - block), progress * 100, episode, total_episodes
+        )
+        print(text, end="")
 
 # Create your environment
 env = EarlyLanguageEnvBeg()
@@ -128,15 +135,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Now use this state_size to initialize your DQNAgent
 action_size = env.action_space.n
+phoneme_list = env.adult_dictionary['consonants'] + env.adult_dictionary['vowels']
+phoneme_to_index = {phoneme: i+1 for i, phoneme in enumerate(phoneme_list)}  # Starting from 1, 0 is reserved for padding
 example_observation, _ = env.reset()
-flattened_example_observation = flatten_state(example_observation)
+flattened_example_observation = flatten_state(example_observation, phoneme_to_index)
 state_size = len(flattened_example_observation)
 
 agent = DQNAgent(state_size, action_size, env.action_space)
 batch_size = 64
 
 # Training loop with data collection for graphing
-total_episodes = 10
+total_episodes = 2
 scores = []  # To store total reward/score per episode
 epsilons = []  # To store epsilon values per episode
 cookie_counts = []  # Number of cookies per episode
@@ -145,10 +154,10 @@ no_actions = []  # Number of no actions per episode
 wrong_guesses = []  # Number of wrong guesses per episode
 epsilons = []  # Epsilon values for each episode
 
-for e in range(total_episodes):
-    print_progress(e, total_episodes)  
+for e in tqdm(range(total_episodes), desc="Training Progress", unit="episode"):
+    #print_progress(e, total_episodes, update_frequency=100)  
     observation, _ = env.reset()
-    state = flatten_state(observation)
+    state = flatten_state(observation, phoneme_to_index)
     state_size = len(state)
     state = np.reshape(state, [1, state_size])
     score = 0  # Reset score for the episode
@@ -161,7 +170,7 @@ for e in range(total_episodes):
     while not done:
         action = agent.act(state, env)
         next_observation, reward, done, _ , info = env.step(action)
-        next_state = flatten_state(next_observation)
+        next_state = flatten_state(next_observation, phoneme_to_index)
         state_size = len(next_state)
         next_state = np.reshape(next_state, [1, state_size])
         agent.remember(state, action, reward, next_state, done)
@@ -185,8 +194,6 @@ for e in range(total_episodes):
     parent_response_scores.append(parent_responses)
     no_actions.append(no_action)
     wrong_guesses.append(wrong_guess)
-
-    print()
 
 # Plotting the results with each variable in its own graph
 plt.figure(figsize=(12, 12))
