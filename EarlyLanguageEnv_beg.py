@@ -145,7 +145,7 @@ class EarlyLanguageEnvBeg(gymnasium.Env):
         else:
             self.parent_state = 'rest'
         
-        sentence = ''
+        sentence = []
 
         if not phonemes:  # Checking if the list is empty (no action taken)
             self.child_state = 'rest'

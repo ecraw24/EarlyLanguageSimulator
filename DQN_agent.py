@@ -11,9 +11,10 @@ import logging
 import matplotlib.pyplot as plt
 
 class DQNAgent:
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, action_space):
         self.state_size = state_size
         self.action_size = action_size
+        self.action_space = action_space
         self.memory = deque(maxlen=2000)
         self.gamma = 0.95    # discount rate
         self.epsilon = 1.0  # exploration rate
@@ -36,32 +37,81 @@ class DQNAgent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state):
+    def act(self, state, env):
         if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
-        act_values = self.model.predict(state)
-        return np.argmax(act_values[0])  # returns action
+            # Exploration: random action
+            action_index = random.randrange(self.action_size)
+        else:
+            # Exploitation: choose best action based on model's prediction
+            act_values = self.model.predict(state)
+            action_index = np.argmax(act_values[0])  # returns index of the best action
+
+        # Convert the single integer action index into a multi-dimensional action
+        multi_dimensional_action = np.unravel_index(action_index, env.action_space.nvec)
+        return multi_dimensional_action
+
+    def action_to_index(self, action):
+        # Assuming action is a tuple like (0, 0, 0, 1)
+        # Convert this tuple to a single index.
+        # The method of conversion depends on how your actions are structured.
+        # One common approach for a MultiDiscrete action space is to treat it
+        # like a number in mixed radix notation.
+
+        index = 0
+        multiplier = 1
+        for action_part, space_size in zip(reversed(action), reversed(self.env.action_space.nvec)):
+            index += action_part * multiplier
+            multiplier *= space_size
+
+        return index
 
     def replay(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
+            state = np.array(state).astype('float32').reshape(1, self.state_size)
+            next_state = np.array(next_state).astype('float32').reshape(1, self.state_size)
+
             target = reward
             if not done:
-                target = (reward + self.gamma * np.amax(self.model.predict(next_state)[0]))
+                target = reward + self.gamma * np.amax(self.model.predict(next_state)[0])
+
             target_f = self.model.predict(state)
-            target_f[0][action] = target
+
+            action_index = self.action_to_index(action)  # Convert the action tuple to an index
+            target_f[0, action_index] = target
+
             self.model.fit(state, target_f, epochs=1, verbose=0)
+
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
     
-def flatten_state(observation):
-    # Flatten the observation dictionary into a single array
-    return np.concatenate([
-        np.array(observation['hour_of_day']).reshape(-1),
-        np.array(observation['day_of_year']).reshape(-1),
-        np.array(observation['year_index']).reshape(-1),
-        np.array(observation['parent_response']).reshape(-1)
-    ])
+def flatten_state(observation, max_response_length=50):
+    # Flatten hour_of_day, day_of_year, and year_index
+    hour_of_day = np.array(observation['hour_of_day']).reshape(-1)
+    day_of_year = np.array(observation['day_of_year']).reshape(-1)
+    year_index = np.array(observation['year_index']).reshape(-1)
+
+    # Handle variable-length parent_response
+    parent_response = np.array(observation['parent_response'], dtype=object)
+    if len(parent_response) < max_response_length:
+        # Pad shorter responses
+        padding = np.zeros(max_response_length - len(parent_response), dtype=int)
+        parent_response = np.concatenate([parent_response, padding])
+    else:
+        # Truncate longer responses
+        parent_response = parent_response[:max_response_length]
+
+    # Concatenate all flattened parts
+    flattened_state = np.concatenate([hour_of_day, day_of_year, year_index, parent_response])
+
+    return flattened_state
+
+
+def standardize_parent_response(parent_response, max_length):
+    standardized_response = np.zeros(max_length, dtype=int)
+    response_length = min(len(parent_response), max_length)
+    standardized_response[:response_length] = parent_response[:response_length]
+    return standardized_response
 
 def print_progress(episode, total_episodes):
     bar_length = 30
@@ -76,13 +126,13 @@ def print_progress(episode, total_episodes):
 env = EarlyLanguageEnvBeg()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-example_observation, _ = env.reset()
-flattened_example_observation = flatten_state(example_observation)
-state_size = flattened_example_observation.shape[0]
-
 # Now use this state_size to initialize your DQNAgent
 action_size = env.action_space.n
-agent = DQNAgent(state_size, action_size)
+example_observation, _ = env.reset()
+flattened_example_observation = flatten_state(example_observation)
+state_size = len(flattened_example_observation)
+
+agent = DQNAgent(state_size, action_size, env.action_space)
 batch_size = 64
 
 # Training loop with data collection for graphing
@@ -99,6 +149,7 @@ for e in range(total_episodes):
     print_progress(e, total_episodes)  
     observation, _ = env.reset()
     state = flatten_state(observation)
+    state_size = len(state)
     state = np.reshape(state, [1, state_size])
     score = 0  # Reset score for the episode
     cookie_count = 0
@@ -106,10 +157,12 @@ for e in range(total_episodes):
     no_action = 0
     wrong_guess = 0
 
-    for time in range(500):
-        action = agent.act(state)
+    done = False
+    while not done:
+        action = agent.act(state, env)
         next_observation, reward, done, _ , info = env.step(action)
         next_state = flatten_state(next_observation)
+        state_size = len(next_state)
         next_state = np.reshape(next_state, [1, state_size])
         agent.remember(state, action, reward, next_state, done)
         state = next_state
