@@ -6,11 +6,10 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# Create your environment
 env = EarlyLanguageEnvBeg()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Function to display a simple text-based progress bar
+# progress bar
 def display_progress_bar(percentage, bar_length=40):
     num_chars = int(percentage * bar_length)
     bar = '[' + '#' * num_chars + '-' * (bar_length - num_chars) + ']'
@@ -38,14 +37,13 @@ def generate_valid_action_for_year(year_index, env):
         return actions
 
 
-# Define the state size and action size
 state_size = 24 * 365 * 3 + 1 # One state for each hour in the 3 years
-action_size = np.prod(env.action_space.nvec)  # Product of dimensions of the action space
+action_size = np.prod(env.action_space.nvec)  # dimensions of the action space
 
-# Initialize the Q-table with the correct dimensions
+# q-table
 q_table = np.zeros((state_size, action_size))
 
-# Hyperparameters
+# hyperparameters
 learning_rate = 0.5
 discount_rate = 0.25 # how much a child cares about LT reward
 epsilon = 1.0
@@ -53,10 +51,9 @@ max_epsilon = 1.0
 min_epsilon = 0.01
 decay_rate = 0.001
 
-# Total number of hours in the simulation
 total_hours = 24 * 365 * 3 + 1
 
-# Initialize lists for data collection
+# data collection
 episode_rewards = []
 epsilons = []
 cookie_counts = []
@@ -64,7 +61,7 @@ parent_response_scores = []
 no_actions = []
 wrong_guesses = []
 
-# Training loop
+# loop
 num_episodes = 1000
 for episode in range(num_episodes):
     observation, _ = env.reset()
@@ -76,10 +73,9 @@ for episode in range(num_episodes):
     wrong_guess = 0
 
     while not done:
-        # Calculate the state index
         state_index = observation['hour_of_day'] + (observation['day_of_year'] - 1) * 24 + observation['year_index'] * 24 * 365
 
-        # Exploration-exploitation tradeoff
+        # tradeoff
         if random.uniform(0, 1) < epsilon:
             action = generate_valid_action_for_year(observation['year_index'], env)
         else:
@@ -87,7 +83,7 @@ for episode in range(num_episodes):
 
         new_observation, reward, done, _, info = env.step(action)
 
-        # Update Q-table
+        # q-table
         new_state_index = new_observation['hour_of_day'] + (new_observation['day_of_year'] - 1) * 24 + new_observation['year_index'] * 24 * 365
         
         try:
@@ -96,6 +92,7 @@ for episode in range(num_episodes):
             logging.error(f"Error updating Q-table: {e}")
             logging.error(f"Action: {action}, Action Space NVec: {env.action_space.nvec}")
         
+        # data collection
         total_rewards = reward
         cookie_count = info['Cookie Count']
         parent_responses = info['Parent Responses']
@@ -111,12 +108,12 @@ for episode in range(num_episodes):
         no_actions.append(no_action)
         wrong_guesses.append(wrong_guess)
 
-        # Calculate and display the progress bar
+        # progress bar
         current_hour = observation['hour_of_day'] + (observation['day_of_year'] - 1) * 24 + observation['year_index'] * 24 * 365
         progress_percentage = current_hour / total_hours
         print(f'\rEpisode: {episode}, Progress: {display_progress_bar(progress_percentage)}', end='')
 
-    # Reduce epsilon
+    # reduce epsilon
     epsilon = min_epsilon + (max_epsilon - min_epsilon) * np.exp(-decay_rate * episode)
 
     print(f"\nEpisode: {episode}, Total Reward: {total_rewards:.2f}, "
@@ -126,72 +123,67 @@ for episode in range(num_episodes):
 
 env.close()
 
-# Plotting the results with each variable in its own graph
+# plot results
 plt.figure(figsize=(12, 12))
 
-# Plotting total rewards
+# rewards
 plt.subplot(2, 3, 1)
 plt.plot(episode_rewards)
 plt.title('Total Rewards per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Total Reward')
 
-# Plotting cookie counts
+# cookie counts
 plt.subplot(2, 3, 2)
 plt.plot(cookie_counts)
 plt.title('Cookie Counts per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Cookie Count')
 
-# Plotting parent response scores
+# parent response
 plt.subplot(2, 3, 3)
 plt.plot(parent_response_scores)
 plt.title('Parent Response Scores per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Parent Response Score')
 
-# Plotting no actions
+# no action
 plt.subplot(2, 3, 4)
 plt.plot(no_actions)
 plt.title('No Actions per Episode')
 plt.xlabel('Episode')
 plt.ylabel('No Action')
 
-# Plotting wrong guesses
+# wrong guesses
 plt.subplot(2, 3, 5)
 plt.plot(wrong_guesses)
 plt.title('Wrong Guesses per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Wrong Guesses')
 
-# Plotting epsilon values
+# epsilon
 plt.subplot(2, 3, 6)
 plt.plot(epsilons)
 plt.title('Epsilon Values Over Episodes')
 plt.xlabel('Episode')
 plt.ylabel('Epsilon')
 
-# Adjust layout for better fit
 plt.tight_layout()
 plt.show()
 
 
 
 
-# # Define the target child sentences
 # target_sentences = [['g', 'oo'], ['k', 'oo', 'k', 'oo'], ['k', 'oo', 'k', 'ee']]
 
-# # Initialize a list to store the flattened data
 # flattened_data = []
 
-# # Loop through each episode's data to flatten it
 # for episode_info in episode_data:
 #     episode_number = episode_info['Episode']
 #     total_reward = episode_info['Total Reward']
 #     for year, data_list in episode_info['Year Data'].items():
 #         for data in data_list:
 #             child_sentence = data.get('Child Sentence', [])
-#             # Check if child sentence matches one of the target sentences
 #             if child_sentence in target_sentences:
 #                 flattened_data.append({
 #                     'Episode #': episode_number,
@@ -205,8 +197,5 @@ plt.show()
 #                     'Wrong Guess': data.get('Wrong Guesses', 0)
 #                 })
 
-# # Create DataFrame from the flattened data
 # df = pd.DataFrame(flattened_data)
-
-# # Export to CSV
 # df.to_csv('episode_data.csv', index=False)

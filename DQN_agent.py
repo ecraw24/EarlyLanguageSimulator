@@ -17,15 +17,14 @@ class DQNAgent:
         self.action_size = action_size
         self.action_space = action_space
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.95    # discount rate
-        self.epsilon = 1.0  # exploration rate
+        self.gamma = 0.95    # discount 
+        self.epsilon = 1.0  # exploration 
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
         self.learning_rate = 0.001
         self.model = self._build_model()
 
     def _build_model(self):
-        # Neural Net for Deep-Q learning Model
         model = Sequential()
         model.add(Dense(64, input_dim=self.state_size, activation='relu', kernel_regularizer=l2(0.01)))
         model.add(Dropout(0.2))
@@ -40,24 +39,18 @@ class DQNAgent:
 
     def act(self, state, env):
         if np.random.rand() <= self.epsilon:
-            # Exploration: random action
             action_index = random.randrange(self.action_size)
         else:
-            # Exploitation: choose best action based on model's prediction
+            # Exploitation
             act_values = self.model.predict(state)
-            action_index = np.argmax(act_values[0])  # returns index of the best action
+            action_index = np.argmax(act_values[0])  # best action
 
-        # Convert the single integer action index into a multi-dimensional action
+        # single integer --> multi-dimensional action
         multi_dimensional_action = np.unravel_index(action_index, env.action_space.nvec)
         return multi_dimensional_action
 
     def action_to_index(self, action):
-        # Assuming action is a tuple like (0, 0, 0, 1)
-        # Convert this tuple to a single index.
-        # The method of conversion depends on how your actions are structured.
-        # One common approach for a MultiDiscrete action space is to treat it
-        # like a number in mixed radix notation.
-
+        # tuple like (0, 0, 0, 1) to single index
         index = 0
         multiplier = 1
         for action_part, space_size in zip(reversed(action), reversed(self.action_space.nvec)):
@@ -77,8 +70,7 @@ class DQNAgent:
                 target = reward + self.gamma * np.amax(self.model.predict(next_state)[0])
 
             target_f = self.model.predict(state)
-
-            action_index = self.action_to_index(action)  # Convert the action tuple to an index
+            action_index = self.action_to_index(action)
             target_f[0, action_index] = target
 
             self.model.fit(state, target_f, epochs=1, verbose=1)
@@ -87,31 +79,27 @@ class DQNAgent:
             self.epsilon *= self.epsilon_decay
 
 def encode_parent_response(parent_response, phoneme_to_index, max_length):
-    # Flatten the list of lists into a single list of phonemes
+    # single list of phonemes
     flat_response = [phoneme for sublist in parent_response for phoneme in sublist]
 
     encoded_response = np.zeros(max_length, dtype=int)
     for i, phoneme in enumerate(flat_response):
         if i >= max_length:
             break
-        encoded_response[i] = phoneme_to_index.get(phoneme, 0)  # Default to 0 for unknown phonemes
+        encoded_response[i] = phoneme_to_index.get(phoneme, 0)  # 0 for unknown
     return encoded_response
     
 def flatten_state(observation, phoneme_to_index, max_response_length=50):
-    # Flatten hour_of_day, day_of_year, and year_index
     hour_of_day = np.array(observation['hour_of_day']).reshape(-1)
     day_of_year = np.array(observation['day_of_year']).reshape(-1)
     year_index = np.array(observation['year_index']).reshape(-1)
 
-    # Handle variable-length parent_response
-    parent_response = np.array(observation['parent_response'], dtype=object)
+    # parent_response of diff lengths
+    #parent_response = np.array(observation['parent_response'], dtype=object)
     encoded_response = encode_parent_response(observation['parent_response'], phoneme_to_index, max_response_length)
-
-    # Concatenate all flattened parts
     flattened_state = np.concatenate([hour_of_day, day_of_year, year_index, encoded_response])
 
     return flattened_state
-
 
 def standardize_parent_response(parent_response, max_length):
     standardized_response = np.zeros(max_length, dtype=int)
@@ -129,30 +117,28 @@ def print_progress(episode, total_episodes, update_frequency=10):
         )
         print(text, end="")
 
-# Create your environment
 env = EarlyLanguageEnvBeg()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Now use this state_size to initialize your DQNAgent
+# setup initial variables for episodes
 action_size = env.action_space.n
 phoneme_list = env.adult_dictionary['consonants'] + env.adult_dictionary['vowels']
 phoneme_to_index = {phoneme: i+1 for i, phoneme in enumerate(phoneme_list)}  # Starting from 1, 0 is reserved for padding
 example_observation, _ = env.reset()
 flattened_example_observation = flatten_state(example_observation, phoneme_to_index)
 state_size = len(flattened_example_observation)
-
 agent = DQNAgent(state_size, action_size, env.action_space)
 batch_size = 64
 
-# Training loop with data collection for graphing
+# set up data tracking
 total_episodes = 2
-scores = []  # To store total reward/score per episode
-epsilons = []  # To store epsilon values per episode
-cookie_counts = []  # Number of cookies per episode
-parent_response_scores = []  # Parent response scores per episode
-no_actions = []  # Number of no actions per episode
-wrong_guesses = []  # Number of wrong guesses per episode
-epsilons = []  # Epsilon values for each episode
+scores = []  
+epsilons = []  
+cookie_counts = []  
+parent_response_scores = []  
+no_actions = []  
+wrong_guesses = []  
+epsilons = []  
 
 for e in tqdm(range(total_episodes), desc="Training Progress", unit="episode"):
     #print_progress(e, total_episodes, update_frequency=100)  
@@ -160,7 +146,7 @@ for e in tqdm(range(total_episodes), desc="Training Progress", unit="episode"):
     state = flatten_state(observation, phoneme_to_index)
     state_size = len(state)
     state = np.reshape(state, [1, state_size])
-    score = 0  # Reset score for the episode
+    score = 0  
     cookie_count = 0
     parent_responses = 0
     no_action = 0
@@ -195,51 +181,50 @@ for e in tqdm(range(total_episodes), desc="Training Progress", unit="episode"):
     no_actions.append(no_action)
     wrong_guesses.append(wrong_guess)
 
-# Plotting the results with each variable in its own graph
+# plot results
 plt.figure(figsize=(12, 12))
 
-# Plotting total rewards per episode
+# rewards
 plt.subplot(2, 3, 1)
 plt.plot(score)
 plt.title('Total Rewards per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Total Reward')
 
-# Plotting cookie counts per episode
+# cookie counts 
 plt.subplot(2, 3, 2)
 plt.plot(cookie_counts)
 plt.title('Cookie Counts per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Cookie Count')
 
-# Plotting parent response scores per episode
+# response 
 plt.subplot(2, 3, 3)
 plt.plot(parent_response_scores)
 plt.title('Parent Response Scores per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Parent Response Score')
 
-# Plotting no actions per episode
+# no action
 plt.subplot(2, 3, 4)
 plt.plot(no_actions)
 plt.title('No Actions per Episode')
 plt.xlabel('Episode')
 plt.ylabel('No Action')
 
-# Plotting wrong guesses per episode
+# wrong guesses 
 plt.subplot(2, 3, 5)
 plt.plot(wrong_guesses)
 plt.title('Wrong Guesses per Episode')
 plt.xlabel('Episode')
 plt.ylabel('Wrong Guesses')
 
-# Plotting epsilon values over episodes
+# epsilon 
 plt.subplot(2, 3, 6)
 plt.plot(epsilons)
 plt.title('Epsilon Values Over Episodes')
 plt.xlabel('Episode')
 plt.ylabel('Epsilon')
 
-# Adjust layout for better fit
 plt.tight_layout()
 plt.show()

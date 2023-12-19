@@ -3,5 +3,4 @@ from EarlyLanguageEnv_beg import EarlyLanguageEnvBeg
 
 
 env = EarlyLanguageEnvBeg()
-# It will check your custom environment and output additional warnings if needed
 check_env(env)
